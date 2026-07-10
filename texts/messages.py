@@ -191,9 +191,15 @@ def settings_text() -> str:
         access_status = f"закрытый 🔒 ({len(settings.allowed_user_ids)} ID)"
     else:
         access_status = "открытый 🌍"
+    audio_backend = (
+        "fal.ai (Stable Audio + SFX)"
+        if settings.HF_AUDIO_BACKEND == "fal"
+        else "hf-inference (legacy)"
+    )
     return (
         "⚙️ <b>Настройки</b>\n\n"
         f"Доступ к боту: {access_status}\n"
+        f"Генерация аудио: {audio_backend}\n"
         f"Улучшение промтов через Gemini: {gemini_status}\n"
         f"Максимальная длительность джингла: до {settings.MAX_EXTENDED_MUSIC_DURATION_SECONDS:.0f} сек "
         f"(склейка сегментов по {settings.MAX_MUSIC_DURATION_SECONDS:.0f} сек)\n"

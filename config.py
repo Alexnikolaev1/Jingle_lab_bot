@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     HF_RETRY_DELAY_SECONDS: int = 10
     HF_MAX_CONCURRENT_REQUESTS: int = 2
 
+    # Аудио-бэкенд: fal (Stable Audio + SFX через HF Router) или hf-inference (устарел для MusicGen)
+    HF_AUDIO_BACKEND: str = "fal"
+    FAL_MUSIC_MODEL: str = "fal-ai/stable-audio-25/text-to-audio"
+    FAL_SOUND_MODEL: str = "cassetteai/sound-effects-generator"
+    FAL_LOGO_MODEL: str = "fal-ai/stable-audio-25/text-to-audio"
+
     # Gemini (опционально)
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-1.5-flash"
@@ -109,6 +115,14 @@ class Settings(BaseSettings):
             part = part.strip()
             if part:
                 int(part)
+        return value
+
+    @field_validator("HF_AUDIO_BACKEND")
+    @classmethod
+    def _validate_audio_backend(cls, value: str) -> str:
+        value = (value or "fal").strip().lower()
+        if value not in ("fal", "hf-inference"):
+            raise ValueError("HF_AUDIO_BACKEND должен быть 'fal' или 'hf-inference'.")
         return value
 
     @property

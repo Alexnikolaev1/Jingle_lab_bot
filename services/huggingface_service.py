@@ -1,5 +1,5 @@
 """
-services/huggingface_service.py — Клиент Hugging Face Inference API.
+services/huggingface_service.py — Клиент генерации аудио (fal.ai / legacy HF).
 """
 
 import asyncio
@@ -93,6 +93,12 @@ async def _post_to_hf(url: str, payload: dict) -> bytes:
 
                     body_text = await resp.text()
                     logger.error("HF ошибка %s: %s", resp.status, body_text[:500])
+                    if "not supported by provider hf-inference" in body_text:
+                        raise HuggingFaceError(
+                            "MusicGen/AudioLDM больше не доступны на бесплатном hf-inference. "
+                            "Установите HF_AUDIO_BACKEND=fal (по умолчанию) и токен с правом "
+                            "Inference Providers."
+                        )
                     raise HuggingFaceError(
                         f"Hugging Face вернул ошибку {resp.status}: {body_text[:300]}"
                     )
@@ -134,8 +140,28 @@ def _build_music_prompt(prompt: str) -> str:
     return prompt
 
 
+async def _generate_via_fal(kind: str, prompt: str, duration: float) -> GenerationResult:
+    from services import fal_audio_service
+
+    if kind == "music":
+        audio_bytes = await fal_audio_service.generate_music(prompt, duration)
+        model = "stable-audio-25"
+    elif kind == "sound":
+        audio_bytes = await fal_audio_service.generate_sound(prompt, duration)
+        model = "cassetteai-sfx"
+    else:
+        audio_bytes = await fal_audio_service.generate_logo(prompt, duration)
+        model = "stable-audio-25-logo"
+    return GenerationResult(audio_bytes=audio_bytes, model_used=model, duration=duration)
+
+
 async def generate_music(prompt: str, duration: float = 10.0) -> GenerationResult:
     enriched_prompt = _build_music_prompt(prompt)
+    logger.info("Генерация музыки: %s (%.1f сек)", enriched_prompt, duration)
+
+    if settings.HF_AUDIO_BACKEND == "fal":
+        return await _generate_via_fal("music", enriched_prompt, duration)
+
     payload = {
         "inputs": enriched_prompt,
         "parameters": {
@@ -143,7 +169,6 @@ async def generate_music(prompt: str, duration: float = 10.0) -> GenerationResul
             "duration": duration,
         },
     }
-    logger.info("Генерация музыки: %s (%.1f сек)", enriched_prompt, duration)
     audio_bytes = await _post_to_hf(settings.HF_MUSICGEN_MODEL_URL, payload)
     return GenerationResult(
         audio_bytes=audio_bytes, model_used="musicgen-small", duration=duration
@@ -152,11 +177,16 @@ async def generate_music(prompt: str, duration: float = 10.0) -> GenerationResul
 
 async def generate_sound(prompt: str) -> GenerationResult:
     enriched_prompt = prompt.strip()
-    payload = {"inputs": enriched_prompt}
+    duration = settings.MAX_SOUND_DURATION_SECONDS
     logger.info("Генерация звукового эффекта: %s", enriched_prompt)
+
+    if settings.HF_AUDIO_BACKEND == "fal":
+        return await _generate_via_fal("sound", enriched_prompt, duration)
+
+    payload = {"inputs": enriched_prompt}
     audio_bytes = await _post_to_hf(settings.HF_AUDIOLDM_MODEL_URL, payload)
     return GenerationResult(
-        audio_bytes=audio_bytes, model_used="audioldm", duration=10.0
+        audio_bytes=audio_bytes, model_used="audioldm", duration=duration
     )
 
 
@@ -165,6 +195,11 @@ async def generate_logo(prompt: str, duration: float = 2.0) -> GenerationResult:
         f"{prompt.strip()}, short sound logo, brand identity sound, "
         f"punchy, memorable, {duration:.1f} seconds sting"
     )
+    logger.info("Генерация аудиологотипа: %s (%.1f сек)", branded_prompt, duration)
+
+    if settings.HF_AUDIO_BACKEND == "fal":
+        return await _generate_via_fal("logo", branded_prompt, duration)
+
     payload = {
         "inputs": branded_prompt,
         "parameters": {
@@ -172,7 +207,6 @@ async def generate_logo(prompt: str, duration: float = 2.0) -> GenerationResult:
             "duration": duration,
         },
     }
-    logger.info("Генерация аудиологотипа: %s (%.1f сек)", branded_prompt, duration)
     audio_bytes = await _post_to_hf(settings.HF_MUSICGEN_MODEL_URL, payload)
     return GenerationResult(
         audio_bytes=audio_bytes, model_used="musicgen-small-logo", duration=duration
