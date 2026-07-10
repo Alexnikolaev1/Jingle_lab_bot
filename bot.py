@@ -15,7 +15,7 @@ from aiohttp import web
 from config import settings
 import database as db
 from handlers import setup_routers
-from middlewares import ErrorHandlerMiddleware, ThrottlingMiddleware, UserMiddleware
+from middlewares import AccessMiddleware, ErrorHandlerMiddleware, ThrottlingMiddleware, UserMiddleware
 from utils.helpers import cleanup_old_tmp_files, ensure_tmp_dir
 from utils.http_client import close_http_session
 from utils.queue_service import generation_queue
@@ -60,6 +60,7 @@ async def _create_storage():
 def create_dispatcher(storage) -> Dispatcher:
     dp = Dispatcher(storage=storage)
     dp.update.middleware(ErrorHandlerMiddleware())
+    dp.update.middleware(AccessMiddleware())
     dp.update.middleware(UserMiddleware())
     dp.message.middleware(ThrottlingMiddleware(rate_limit=settings.THROTTLE_RATE_SECONDS))
     dp.callback_query.middleware(

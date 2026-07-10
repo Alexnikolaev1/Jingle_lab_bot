@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # Telegram
     TELEGRAM_BOT_TOKEN: str
+    ALLOWED_USER_IDS: str = ""
 
     # Hugging Face
     HF_API_KEY: str
@@ -97,6 +98,32 @@ class Settings(BaseSettings):
             }
             raise ValueError(hints.get(field, f"{field} обязателен."))
         return value.strip()
+
+    @field_validator("ALLOWED_USER_IDS")
+    @classmethod
+    def _validate_allowed_user_ids(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            return ""
+        for part in value.split(","):
+            part = part.strip()
+            if part:
+                int(part)
+        return value
+
+    @property
+    def allowed_user_ids(self) -> frozenset[int]:
+        if not self.ALLOWED_USER_IDS:
+            return frozenset()
+        return frozenset(
+            int(part.strip())
+            for part in self.ALLOWED_USER_IDS.split(",")
+            if part.strip()
+        )
+
+    @property
+    def access_restricted(self) -> bool:
+        return bool(self.allowed_user_ids)
 
     @property
     def GEMINI_ENABLED(self) -> bool:

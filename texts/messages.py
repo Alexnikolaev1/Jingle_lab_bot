@@ -170,6 +170,11 @@ NO_PREVIOUS_FILE = (
 
 THROTTLE = "⏱ Подожди пару секунд перед следующим запросом."
 
+ACCESS_DENIED = (
+    "🔒 Бот сейчас работает в закрытом режиме.\n"
+    "Доступ только для приглашённых пользователей."
+)
+
 LIBRARY_EMPTY = (
     "📚 Твоя библиотека пока пуста. Сгенерируй первый джингл, "
     "звук или аудиологотип!"
@@ -182,8 +187,13 @@ def settings_text() -> str:
     gemini_status = (
         "включено ✅" if settings.GEMINI_ENABLED else "выключено ⛔️ (нет ключа)"
     )
+    if settings.access_restricted:
+        access_status = f"закрытый 🔒 ({len(settings.allowed_user_ids)} ID)"
+    else:
+        access_status = "открытый 🌍"
     return (
         "⚙️ <b>Настройки</b>\n\n"
+        f"Доступ к боту: {access_status}\n"
         f"Улучшение промтов через Gemini: {gemini_status}\n"
         f"Максимальная длительность джингла: до {settings.MAX_EXTENDED_MUSIC_DURATION_SECONDS:.0f} сек "
         f"(склейка сегментов по {settings.MAX_MUSIC_DURATION_SECONDS:.0f} сек)\n"
