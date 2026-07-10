@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     # Hugging Face
     HF_API_KEY: str
     HF_MUSICGEN_MODEL_URL: str = (
-        "https://api-inference.huggingface.co/models/facebook/musicgen-small"
+        "https://router.huggingface.co/hf-inference/models/facebook/musicgen-small"
     )
     HF_AUDIOLDM_MODEL_URL: str = (
-        "https://api-inference.huggingface.co/models/haoheliu/audioldm"
+        "https://router.huggingface.co/hf-inference/models/haoheliu/audioldm"
     )
     HF_REQUEST_TIMEOUT_SECONDS: int = 120
     HF_MAX_RETRIES: int = 5

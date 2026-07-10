@@ -18,6 +18,16 @@ logger = logging.getLogger("jinglelab.huggingface")
 _HEADERS = {"Authorization": f"Bearer {settings.HF_API_KEY}"}
 _semaphore = asyncio.Semaphore(settings.HF_MAX_CONCURRENT_REQUESTS)
 
+_LEGACY_HF_HOST = "https://api-inference.huggingface.co/models/"
+_ROUTER_HF_HOST = "https://router.huggingface.co/hf-inference/models/"
+
+
+def normalize_hf_model_url(url: str) -> str:
+    """Миграция со снятого api-inference.huggingface.co на router.huggingface.co."""
+    if url.startswith(_LEGACY_HF_HOST):
+        return _ROUTER_HF_HOST + url[len(_LEGACY_HF_HOST) :]
+    return url
+
 
 class HuggingFaceError(Exception):
     """Ошибка при обращении к Hugging Face Inference API."""
@@ -39,6 +49,7 @@ class GenerationResult:
 
 
 async def _post_to_hf(url: str, payload: dict) -> bytes:
+    url = normalize_hf_model_url(url)
     timeout = aiohttp.ClientTimeout(total=settings.HF_REQUEST_TIMEOUT_SECONDS)
     session = get_http_session()
 
@@ -92,6 +103,14 @@ async def _post_to_hf(url: str, payload: dict) -> bytes:
                 )
                 last_error = "Превышено время ожидания ответа от Hugging Face."
                 continue
+
+            except aiohttp.ClientConnectorError as exc:
+                logger.exception("HF: ошибка подключения к %s", url)
+                raise HuggingFaceError(
+                    "Не удалось подключиться к Hugging Face Inference API. "
+                    "Проверьте HF_API_KEY (нужен доступ к Inference Providers) "
+                    "и что в Railway заданы актуальные URL router.huggingface.co."
+                ) from exc
 
         if last_error and "загружается" in last_error:
             raise ModelLoadingError(
