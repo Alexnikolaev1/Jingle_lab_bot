@@ -1,0 +1,13 @@
+# nixpacks.toml — используется Railway (сборщик Nixpacks) для установки
+# системных пакетов, которых нет в стандартном Python-образе.
+# ffmpeg обязателен: он вызывается ботом для постобработки аудио
+# (обрезка, фейды, нормализация, конвертация форматов).
+
+[phases.setup]
+nixPkgs = ["ffmpeg", "python311"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python bot.py"
