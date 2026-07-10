@@ -11,6 +11,7 @@ import database as db
 from config import settings
 from models.enums import GenerationKind
 from services.generation_service import (
+    CreditsExhaustedError,
     HuggingFaceError,
     ModelLoadingError,
     RateLimitError,
@@ -100,6 +101,8 @@ async def _do_generate(
         await status_message.edit_text(messages.MODEL_LOADING)
     except RateLimitError:
         await status_message.edit_text(messages.RATE_LIMIT)
+    except CreditsExhaustedError:
+        await status_message.edit_text(messages.HF_CREDITS_EXHAUSTED)
     except HuggingFaceError as exc:
         logger.exception("Ошибка генерации для user_id=%s", user_id)
         await status_message.edit_text(messages.GENERATION_FAILED.format(error=exc))

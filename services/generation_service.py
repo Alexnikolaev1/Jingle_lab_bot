@@ -351,3 +351,4 @@ generation_service = GenerationService()
 
 ModelLoadingError = huggingface_service.ModelLoadingError
 RateLimitError = huggingface_service.RateLimitError
+CreditsExhaustedError = huggingface_service.CreditsExhaustedError

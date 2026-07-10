@@ -123,6 +123,15 @@ MODEL_LOADING = (
 RATE_LIMIT = (
     "🚦 Достигнут лимит бесплатных запросов Hugging Face. Попробуй немного позже."
 )
+HF_CREDITS_EXHAUSTED = (
+    "💳 Закончились бесплатные кредиты Hugging Face Inference Providers "
+    "(на Free-тарифе ~$0.10/мес).\n\n"
+    "Варианты:\n"
+    "• Подождать до 1-го числа — кредиты обновятся\n"
+    "• HF PRO или докупить кредиты: huggingface.co/settings/billing\n"
+    "• Добавить <code>FAL_API_KEY</code> в Railway — генерация пойдёт напрямую через fal.ai "
+    "(ключ: fal.ai/dashboard/keys)"
+)
 GENERATION_FAILED = "❌ Не удалось сгенерировать звук: {error}\nПопробуй переформулировать запрос."
 UNEXPECTED_ERROR = "❌ Произошла непредвиденная ошибка при генерации. Попробуй ещё раз."
 

@@ -12,12 +12,13 @@ from urllib.parse import urlparse
 import aiohttp
 
 from config import settings
-from services.huggingface_service import HuggingFaceError, RateLimitError
+from services.huggingface_service import CreditsExhaustedError, HuggingFaceError, RateLimitError
 from utils.http_client import get_http_session
 
 logger = logging.getLogger("jinglelab.fal_audio")
 
 _FAL_ROUTER_BASE = "https://router.huggingface.co/fal-ai"
+_FAL_QUEUE_BASE = "https://queue.fal.run"
 _POLL_INTERVAL_SECONDS = 2.0
 _FALLBACK_PROVIDER_MODEL = "fal-ai/stable-audio-3/medium/text-to-audio"
 
@@ -125,17 +126,27 @@ async def _download_url(session: aiohttp.ClientSession, url: str) -> bytes:
 
 
 async def generate_via_fal(payload: dict[str, Any]) -> bytes:
-    """Отправляет задачу в fal.ai через HF Router и возвращает байты аудио."""
+    """Отправляет задачу в fal.ai (напрямую или через HF Router) и возвращает байты аудио."""
     model_id = await asyncio.to_thread(_resolve_fal_provider_model_id)
-    submit_url = f"{_FAL_ROUTER_BASE}/{model_id}?_subdomain=queue"
-    headers = {
-        "Authorization": f"Bearer {settings.HF_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    use_direct_fal = bool(settings.FAL_API_KEY.strip())
+    if use_direct_fal:
+        submit_url = f"{_FAL_QUEUE_BASE}/{model_id}"
+        headers = {
+            "Authorization": f"Key {settings.FAL_API_KEY.strip()}",
+            "Content-Type": "application/json",
+        }
+        route = "fal.ai direct"
+    else:
+        submit_url = f"{_FAL_ROUTER_BASE}/{model_id}?_subdomain=queue"
+        headers = {
+            "Authorization": f"Bearer {settings.HF_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        route = "HF Router"
     session = get_http_session()
     timeout = aiohttp.ClientTimeout(total=settings.HF_REQUEST_TIMEOUT_SECONDS)
 
-    logger.info("fal.ai %s — %s", model_id, payload.get("prompt", "")[:120])
+    logger.info("%s %s — %s", route, model_id, payload.get("prompt", "")[:120])
 
     async with session.post(submit_url, json=payload, headers=headers, timeout=timeout) as resp:
         body_text = await resp.text()
@@ -143,7 +154,16 @@ async def generate_via_fal(payload: dict[str, Any]) -> bytes:
             raise RateLimitError(
                 "Достигнут лимит Hugging Face Inference Providers. Попробуйте позже."
             )
+        if resp.status == 402 or "depleted your monthly included credits" in body_text.lower():
+            raise CreditsExhaustedError(
+                "Исчерпаны месячные кредиты Hugging Face Inference Providers."
+            )
         if resp.status in (401, 403):
+            if use_direct_fal:
+                raise HuggingFaceError(
+                    "Неверный FAL_API_KEY. Создайте ключ на fal.ai/dashboard/keys "
+                    "и добавьте в Railway."
+                )
             raise HuggingFaceError(
                 "Нет доступа к Inference Providers. Создайте токен HF с правом "
                 "«Make calls to Inference Providers» (не только Read) на "
@@ -154,7 +174,8 @@ async def generate_via_fal(payload: dict[str, Any]) -> bytes:
             if "Model not supported by provider" in body_text:
                 raise HuggingFaceError(
                     "Модель не зарегистрирована на HF Inference Providers. "
-                    f"Используйте FAL_HUB_AUDIO_MODEL={settings.FAL_HUB_AUDIO_MODEL}."
+                    f"Используйте FAL_HUB_AUDIO_MODEL={settings.FAL_HUB_AUDIO_MODEL} "
+                    "или задайте FAL_API_KEY для прямого доступа к fal.ai."
                 )
             raise HuggingFaceError(
                 f"fal.ai вернул ошибку {resp.status}: {body_text[:300]}"
@@ -164,11 +185,13 @@ async def generate_via_fal(payload: dict[str, Any]) -> bytes:
         except json.JSONDecodeError as exc:
             raise HuggingFaceError("Некорректный ответ fal.ai при постановке в очередь.") from exc
 
-    response_url = queued.get("response_url")
-    if not response_url:
-        raise HuggingFaceError("fal.ai не вернул response_url для очереди.")
-
-    status_url, result_url = _queue_urls(submit_url, response_url)
+    status_url = queued.get("status_url")
+    result_url = queued.get("response_url")
+    if not status_url or not result_url:
+        response_url = queued.get("response_url")
+        if not response_url:
+            raise HuggingFaceError("fal.ai не вернул URL очереди.")
+        status_url, result_url = _queue_urls(submit_url, response_url)
     deadline = asyncio.get_running_loop().time() + settings.HF_REQUEST_TIMEOUT_SECONDS
 
     while asyncio.get_running_loop().time() < deadline:

@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # Аудио-бэкенд: fal (Stable Audio 3 через HF Router) или hf-inference (устарел для MusicGen)
     HF_AUDIO_BACKEND: str = "fal"
     FAL_HUB_AUDIO_MODEL: str = "stabilityai/stable-audio-3-medium"
+    # Прямой ключ fal.ai — биллинг на fal.ai, не расходует HF-кредиты (fal.ai/dashboard/keys)
+    FAL_API_KEY: str = ""
 
     # Gemini (опционально)
     GEMINI_API_KEY: str = ""

@@ -41,6 +41,10 @@ class RateLimitError(HuggingFaceError):
     """Превышен лимит бесплатного тарифа Hugging Face."""
 
 
+class CreditsExhaustedError(HuggingFaceError):
+    """Исчерпаны месячные кредиты Hugging Face Inference Providers."""
+
+
 @dataclass
 class GenerationResult:
     audio_bytes: bytes
