@@ -31,3 +31,14 @@ def test_logo_payload_short():
 
 def test_fallback_provider_model_id():
     assert _resolve_fal_provider_model_id() == _FALLBACK_PROVIDER_MODEL
+
+
+def test_extract_audio_url_nested_response():
+    from services.fal_audio_service import _extract_audio_url
+
+    wrapped = {
+        "response": {
+            "audio": {"url": "https://example.com/audio.wav"},
+        }
+    }
+    assert _extract_audio_url(wrapped) == "https://example.com/audio.wav"

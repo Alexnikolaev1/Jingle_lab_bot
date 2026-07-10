@@ -9,7 +9,7 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     # Telegram
@@ -41,7 +42,7 @@ class Settings(BaseSettings):
     HF_AUDIO_BACKEND: str = "fal"
     FAL_HUB_AUDIO_MODEL: str = "stabilityai/stable-audio-3-medium"
     # Прямой ключ fal.ai — биллинг на fal.ai, не расходует HF-кредиты (fal.ai/dashboard/keys)
-    FAL_API_KEY: str = ""
+    FAL_API_KEY: str = Field(default="", validation_alias=AliasChoices("FAL_API_KEY", "FAL_KEY"))
 
     # Gemini (опционально)
     GEMINI_API_KEY: str = ""
@@ -138,6 +139,10 @@ class Settings(BaseSettings):
     @property
     def access_restricted(self) -> bool:
         return bool(self.allowed_user_ids)
+
+    @property
+    def uses_direct_fal(self) -> bool:
+        return bool(self.FAL_API_KEY.strip())
 
     @property
     def GEMINI_ENABLED(self) -> bool:

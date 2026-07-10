@@ -45,6 +45,10 @@ class CreditsExhaustedError(HuggingFaceError):
     """Исчерпаны месячные кредиты Hugging Face Inference Providers."""
 
 
+class FalBillingError(HuggingFaceError):
+    """Нет баланса или аккаунт fal.ai заблокирован."""
+
+
 @dataclass
 class GenerationResult:
     audio_bytes: bytes

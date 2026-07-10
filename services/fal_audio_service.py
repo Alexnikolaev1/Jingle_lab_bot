@@ -12,7 +12,12 @@ from urllib.parse import urlparse
 import aiohttp
 
 from config import settings
-from services.huggingface_service import CreditsExhaustedError, HuggingFaceError, RateLimitError
+from services.huggingface_service import (
+    CreditsExhaustedError,
+    FalBillingError,
+    HuggingFaceError,
+    RateLimitError,
+)
 from utils.http_client import get_http_session
 
 logger = logging.getLogger("jinglelab.fal_audio")
@@ -90,15 +95,37 @@ def _logo_payload(prompt: str, duration: float) -> dict[str, Any]:
 
 
 def _extract_audio_url(result: dict[str, Any]) -> str:
-    for key in ("audio", "audio_file"):
-        value = result.get(key)
-        if isinstance(value, dict) and value.get("url"):
-            return str(value["url"])
-        if isinstance(value, str) and value.startswith("http"):
-            return value
+    roots: list[dict[str, Any]] = [result]
+    for key in ("response", "payload", "data"):
+        nested = result.get(key)
+        if isinstance(nested, dict):
+            roots.append(nested)
+    for root in roots:
+        for key in ("audio", "audio_file"):
+            value = root.get(key)
+            if isinstance(value, dict) and value.get("url"):
+                return str(value["url"])
+            if isinstance(value, str) and value.startswith("http"):
+                return value
     raise HuggingFaceError(
         "fal.ai вернул ответ без URL аудио. Попробуйте другой промт."
     )
+
+
+def _fal_billing_error(body_text: str) -> FalBillingError | None:
+    lowered = body_text.lower()
+    if any(
+        phrase in lowered
+        for phrase in (
+            "exhausted balance",
+            "user is locked",
+            "insufficient",
+            "payment required",
+            "top up your balance",
+        )
+    ):
+        return FalBillingError("Недостаточно кредитов или аккаунт fal.ai заблокирован.")
+    return None
 
 
 def _queue_urls(submit_url: str, response_url: str) -> tuple[str, str]:
@@ -125,10 +152,28 @@ async def _download_url(session: aiohttp.ClientSession, url: str) -> bytes:
         return await resp.read()
 
 
+async def _fetch_result_json(
+    session: aiohttp.ClientSession,
+    result_url: str,
+    headers: dict[str, str],
+    timeout: aiohttp.ClientTimeout,
+) -> dict[str, Any]:
+    async with session.get(result_url, headers=headers, timeout=timeout) as result_resp:
+        if result_resp.status >= 400:
+            body = await result_resp.text()
+            billing_error = _fal_billing_error(body)
+            if billing_error:
+                raise billing_error
+            raise HuggingFaceError(
+                f"fal.ai result error {result_resp.status}: {body[:300]}"
+            )
+        return await result_resp.json()
+
+
 async def generate_via_fal(payload: dict[str, Any]) -> bytes:
     """Отправляет задачу в fal.ai (напрямую или через HF Router) и возвращает байты аудио."""
     model_id = await asyncio.to_thread(_resolve_fal_provider_model_id)
-    use_direct_fal = bool(settings.FAL_API_KEY.strip())
+    use_direct_fal = settings.uses_direct_fal
     if use_direct_fal:
         submit_url = f"{_FAL_QUEUE_BASE}/{model_id}"
         headers = {
@@ -154,15 +199,20 @@ async def generate_via_fal(payload: dict[str, Any]) -> bytes:
             raise RateLimitError(
                 "Достигнут лимит Hugging Face Inference Providers. Попробуйте позже."
             )
-        if resp.status == 402 or "depleted your monthly included credits" in body_text.lower():
+        billing_error = _fal_billing_error(body_text)
+        if billing_error:
+            raise billing_error
+        if not use_direct_fal and (
+            resp.status == 402 or "depleted your monthly included credits" in body_text.lower()
+        ):
             raise CreditsExhaustedError(
                 "Исчерпаны месячные кредиты Hugging Face Inference Providers."
             )
         if resp.status in (401, 403):
             if use_direct_fal:
                 raise HuggingFaceError(
-                    "Неверный FAL_API_KEY. Создайте ключ на fal.ai/dashboard/keys "
-                    "и добавьте в Railway."
+                    "Неверный FAL_API_KEY или нет доступа. Создайте ключ на "
+                    "fal.ai/dashboard/keys и добавьте в Railway как FAL_API_KEY."
                 )
             raise HuggingFaceError(
                 "Нет доступа к Inference Providers. Создайте токен HF с правом "
@@ -187,6 +237,7 @@ async def generate_via_fal(payload: dict[str, Any]) -> bytes:
 
     status_url = queued.get("status_url")
     result_url = queued.get("response_url")
+    request_id = queued.get("request_id")
     if not status_url or not result_url:
         response_url = queued.get("response_url")
         if not response_url:
@@ -206,14 +257,21 @@ async def generate_via_fal(payload: dict[str, Any]) -> bytes:
     else:
         raise HuggingFaceError("Превышено время ожидания генерации на fal.ai.")
 
-    async with session.get(result_url, headers=headers, timeout=timeout) as result_resp:
-        if result_resp.status >= 400:
-            body = await result_resp.text()
-            raise HuggingFaceError(f"fal.ai result error {result_resp.status}: {body[:300]}")
-        result_data = await result_resp.json()
+    result_urls = [result_url]
+    if use_direct_fal and request_id:
+        base = f"{_FAL_QUEUE_BASE}/{model_id}/requests/{request_id}"
+        if base not in result_urls:
+            result_urls.append(base)
 
-    audio_url = _extract_audio_url(result_data)
-    return await _download_url(session, audio_url)
+    last_error: HuggingFaceError | None = None
+    for candidate_url in result_urls:
+        try:
+            result_data = await _fetch_result_json(session, candidate_url, headers, timeout)
+            audio_url = _extract_audio_url(result_data)
+            return await _download_url(session, audio_url)
+        except HuggingFaceError as exc:
+            last_error = exc
+    raise last_error or HuggingFaceError("Не удалось получить результат от fal.ai.")
 
 
 async def generate_music(prompt: str, duration: float) -> bytes:

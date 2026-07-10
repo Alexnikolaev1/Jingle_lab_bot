@@ -117,6 +117,18 @@ async def _on_startup(bot: Bot) -> None:
             await site.start()
             logger.info("Health-сервер: http://%s:%s/", settings.HOST, settings.PORT)
 
+    if settings.HF_AUDIO_BACKEND == "fal":
+        if settings.uses_direct_fal:
+            logger.info(
+                "Аудио-бэкенд: fal.ai direct (ключ задан, %d символов)",
+                len(settings.FAL_API_KEY.strip()),
+            )
+        else:
+            logger.info(
+                "Аудио-бэкенд: HuggingFace Router (FAL_API_KEY не задан — "
+                "добавьте FAL_API_KEY в Railway для прямого fal.ai)"
+            )
+
     logger.info("JINGLE LAB AI запущен и готов к работе 🎧")
 
 

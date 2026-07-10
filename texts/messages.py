@@ -129,8 +129,15 @@ HF_CREDITS_EXHAUSTED = (
     "Варианты:\n"
     "• Подождать до 1-го числа — кредиты обновятся\n"
     "• HF PRO или докупить кредиты: huggingface.co/settings/billing\n"
-    "• Добавить <code>FAL_API_KEY</code> в Railway — генерация пойдёт напрямую через fal.ai "
-    "(ключ: fal.ai/dashboard/keys)"
+    "• Добавить <code>FAL_API_KEY</code> (или <code>FAL_KEY</code>) в Railway — "
+    "генерация пойдёт напрямую через fal.ai (ключ: fal.ai/dashboard/keys)"
+)
+FAL_BILLING_ERROR = (
+    "💳 Проблема с балансом fal.ai — нет кредитов или аккаунт заблокирован.\n\n"
+    "Проверьте: fal.ai/dashboard/billing\n"
+    "• Промо-кредиты при регистрации бывают не у всех и быстро кончаются\n"
+    "• Постоянного бесплатного тарифа нет (~$0.04 за короткий логотип)\n"
+    "• Если баланс есть, но API пишет «locked» — напишите support@fal.ai"
 )
 GENERATION_FAILED = "❌ Не удалось сгенерировать звук: {error}\nПопробуй переформулировать запрос."
 UNEXPECTED_ERROR = "❌ Произошла непредвиденная ошибка при генерации. Попробуй ещё раз."
