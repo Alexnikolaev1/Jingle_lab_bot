@@ -17,8 +17,6 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN mkdir -p /tmp/jinglelab /data
 
-VOLUME ["/data"]
-
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \

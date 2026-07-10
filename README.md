@@ -119,7 +119,8 @@ long polling, вебхук не требуется.
    - `GEMINI_API_KEY` — (опционально) ключ Google AI Studio
    - `WEBHOOK_HOST` — публичный домен вашего сервиса Railway
 4. Railway автоматически подставит `PORT`.
-5. Health-check: `GET /` возвращает JSON со статусом и размером очереди.
+5. Подключите **Volume** с mount path `/data` — там лежит SQLite (`DB_PATH=/data/jinglelab.db`).
+6. Health-check: `GET /` возвращает JSON со статусом и размером очереди.
 
 ## Команды бота
 
