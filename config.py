@@ -37,11 +37,9 @@ class Settings(BaseSettings):
     HF_RETRY_DELAY_SECONDS: int = 10
     HF_MAX_CONCURRENT_REQUESTS: int = 2
 
-    # Аудио-бэкенд: fal (Stable Audio + SFX через HF Router) или hf-inference (устарел для MusicGen)
+    # Аудио-бэкенд: fal (Stable Audio 3 через HF Router) или hf-inference (устарел для MusicGen)
     HF_AUDIO_BACKEND: str = "fal"
-    FAL_MUSIC_MODEL: str = "fal-ai/stable-audio-25/text-to-audio"
-    FAL_SOUND_MODEL: str = "cassetteai/sound-effects-generator"
-    FAL_LOGO_MODEL: str = "fal-ai/stable-audio-25/text-to-audio"
+    FAL_HUB_AUDIO_MODEL: str = "stabilityai/stable-audio-3-medium"
 
     # Gemini (опционально)
     GEMINI_API_KEY: str = ""

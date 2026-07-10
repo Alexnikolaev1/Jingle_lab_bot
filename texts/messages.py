@@ -192,7 +192,7 @@ def settings_text() -> str:
     else:
         access_status = "открытый 🌍"
     audio_backend = (
-        "fal.ai (Stable Audio + SFX)"
+        "fal.ai (Stable Audio 3)"
         if settings.HF_AUDIO_BACKEND == "fal"
         else "hf-inference (legacy)"
     )

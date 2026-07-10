@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urlparse
 
@@ -18,33 +19,72 @@ logger = logging.getLogger("jinglelab.fal_audio")
 
 _FAL_ROUTER_BASE = "https://router.huggingface.co/fal-ai"
 _POLL_INTERVAL_SECONDS = 2.0
+_FALLBACK_PROVIDER_MODEL = "fal-ai/stable-audio-3/medium/text-to-audio"
 
 
-def _music_payload(prompt: str, duration: float) -> dict[str, Any]:
+@lru_cache
+def _resolve_fal_provider_model_id() -> str:
+    """Hub model id → fal provider_id (из inferenceProviderMapping)."""
+    try:
+        from huggingface_hub import HfApi
+
+        info = HfApi(token=settings.HF_API_KEY).model_info(
+            settings.FAL_HUB_AUDIO_MODEL,
+            expand=["inferenceProviderMapping"],
+        )
+        for mapping in info.inference_provider_mapping or []:
+            if mapping.provider == "fal-ai" and mapping.task == "text-to-audio":
+                logger.info(
+                    "fal provider: %s → %s",
+                    settings.FAL_HUB_AUDIO_MODEL,
+                    mapping.provider_id,
+                )
+                return mapping.provider_id
+    except Exception:
+        logger.exception("Не удалось получить mapping с Hub, используем fallback")
+
+    return _FALLBACK_PROVIDER_MODEL
+
+
+def _base_payload(prompt: str, duration: float) -> dict[str, Any]:
     seconds = max(1, min(int(round(duration)), 30))
     return {
         "prompt": prompt,
-        "seconds_total": seconds,
+        "duration": float(seconds),
         "num_inference_steps": 8,
         "guidance_scale": 1.0,
+        "output_format": "wav",
     }
 
 
+def _music_payload(prompt: str, duration: float) -> dict[str, Any]:
+    return _base_payload(prompt, duration)
+
+
 def _sound_payload(prompt: str, duration: float) -> dict[str, Any]:
-    seconds = max(1, min(int(round(duration)), 30))
-    return {"prompt": prompt, "duration": seconds}
+    enriched = f"Sound effect, foley, isolated sound, no music: {prompt.strip()}"
+    seconds = max(1, min(int(round(duration)), 10))
+    return {
+        "prompt": enriched,
+        "duration": float(seconds),
+        "num_inference_steps": 8,
+        "guidance_scale": 1.0,
+        "output_format": "wav",
+    }
 
 
 def _logo_payload(prompt: str, duration: float) -> dict[str, Any]:
+    enriched = (
+        f"{prompt.strip()}, short brand sound logo sting, punchy, memorable, "
+        "no long musical development"
+    )
     seconds = max(1, min(int(round(duration)), 5))
     return {
-        "prompt": (
-            f"{prompt.strip()}, short brand sound logo sting, punchy, memorable, "
-            "no long musical development"
-        ),
-        "seconds_total": seconds,
+        "prompt": enriched,
+        "duration": float(seconds),
         "num_inference_steps": 8,
         "guidance_scale": 1.0,
+        "output_format": "wav",
     }
 
 
@@ -84,8 +124,9 @@ async def _download_url(session: aiohttp.ClientSession, url: str) -> bytes:
         return await resp.read()
 
 
-async def generate_via_fal(model_id: str, payload: dict[str, Any]) -> bytes:
+async def generate_via_fal(payload: dict[str, Any]) -> bytes:
     """Отправляет задачу в fal.ai через HF Router и возвращает байты аудио."""
+    model_id = await asyncio.to_thread(_resolve_fal_provider_model_id)
     submit_url = f"{_FAL_ROUTER_BASE}/{model_id}?_subdomain=queue"
     headers = {
         "Authorization": f"Bearer {settings.HF_API_KEY}",
@@ -110,6 +151,11 @@ async def generate_via_fal(model_id: str, payload: dict[str, Any]) -> bytes:
             )
         if resp.status >= 400:
             logger.error("fal submit %s: %s", resp.status, body_text[:500])
+            if "Model not supported by provider" in body_text:
+                raise HuggingFaceError(
+                    "Модель не зарегистрирована на HF Inference Providers. "
+                    f"Используйте FAL_HUB_AUDIO_MODEL={settings.FAL_HUB_AUDIO_MODEL}."
+                )
             raise HuggingFaceError(
                 f"fal.ai вернул ошибку {resp.status}: {body_text[:300]}"
             )
@@ -148,12 +194,12 @@ async def generate_via_fal(model_id: str, payload: dict[str, Any]) -> bytes:
 
 
 async def generate_music(prompt: str, duration: float) -> bytes:
-    return await generate_via_fal(settings.FAL_MUSIC_MODEL, _music_payload(prompt, duration))
+    return await generate_via_fal(_music_payload(prompt, duration))
 
 
 async def generate_sound(prompt: str, duration: float = 10.0) -> bytes:
-    return await generate_via_fal(settings.FAL_SOUND_MODEL, _sound_payload(prompt, duration))
+    return await generate_via_fal(_sound_payload(prompt, duration))
 
 
 async def generate_logo(prompt: str, duration: float) -> bytes:
-    return await generate_via_fal(settings.FAL_LOGO_MODEL, _logo_payload(prompt, duration))
+    return await generate_via_fal(_logo_payload(prompt, duration))

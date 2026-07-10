@@ -145,13 +145,13 @@ async def _generate_via_fal(kind: str, prompt: str, duration: float) -> Generati
 
     if kind == "music":
         audio_bytes = await fal_audio_service.generate_music(prompt, duration)
-        model = "stable-audio-25"
+        model = "stable-audio-3-medium"
     elif kind == "sound":
         audio_bytes = await fal_audio_service.generate_sound(prompt, duration)
-        model = "cassetteai-sfx"
+        model = "stable-audio-3-sfx"
     else:
         audio_bytes = await fal_audio_service.generate_logo(prompt, duration)
-        model = "stable-audio-25-logo"
+        model = "stable-audio-3-logo"
     return GenerationResult(audio_bytes=audio_bytes, model_used=model, duration=duration)
 
 
