@@ -135,38 +135,52 @@ async def _on_shutdown(bot: Bot) -> None:
 def main() -> None:
     _init_sentry()
 
-    async def _main_async() -> None:
-        storage = await _create_storage()
-        bot = Bot(
-            token=settings.TELEGRAM_BOT_TOKEN,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    if settings.USE_WEBHOOK:
+        _run_webhook()
+    else:
+        asyncio.run(_run_polling())
+
+
+def _run_webhook() -> None:
+    """Webhook: web.run_app сам управляет event loop — нельзя вызывать внутри asyncio.run()."""
+    storage = asyncio.run(_create_storage())
+    bot = Bot(
+        token=settings.TELEGRAM_BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+    dp = create_dispatcher(storage)
+    dp.startup.register(_on_startup)
+    dp.shutdown.register(_on_shutdown)
+
+    app = web.Application()
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(
+        app, path=settings.WEBHOOK_PATH
+    )
+    setup_application(app, dp, bot=bot)
+
+    async def health_check(request: web.Request) -> web.Response:
+        return web.json_response(
+            {
+                "status": "ok",
+                "service": "JINGLE LAB AI",
+                "queue_size": generation_queue.size,
+            }
         )
-        dp = create_dispatcher(storage)
-        dp.startup.register(_on_startup)
-        dp.shutdown.register(_on_shutdown)
 
-        if settings.USE_WEBHOOK:
-            app = web.Application()
-            SimpleRequestHandler(dispatcher=dp, bot=bot).register(
-                app, path=settings.WEBHOOK_PATH
-            )
-            setup_application(app, dp, bot=bot)
+    app.router.add_get("/", health_check)
+    web.run_app(app, host=settings.HOST, port=settings.PORT)
 
-            async def health_check(request: web.Request) -> web.Response:
-                return web.json_response(
-                    {
-                        "status": "ok",
-                        "service": "JINGLE LAB AI",
-                        "queue_size": generation_queue.size,
-                    }
-                )
 
-            app.router.add_get("/", health_check)
-            web.run_app(app, host=settings.HOST, port=settings.PORT)
-        else:
-            await dp.start_polling(bot)
-
-    asyncio.run(_main_async())
+async def _run_polling() -> None:
+    storage = await _create_storage()
+    bot = Bot(
+        token=settings.TELEGRAM_BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+    dp = create_dispatcher(storage)
+    dp.startup.register(_on_startup)
+    dp.shutdown.register(_on_shutdown)
+    await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
