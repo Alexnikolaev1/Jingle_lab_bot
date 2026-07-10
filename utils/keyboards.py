@@ -202,13 +202,13 @@ def _postprocess_rows() -> list[list[InlineKeyboardButton]]:
                 InlineKeyboardButton(
                     text="✂️ 0–5 сек",
                     callback_data=PostprocessCallback(
-                        action="trim_preset", value="0:5"
+                        action="trim_preset", value="0-5"
                     ).pack(),
                 ),
                 InlineKeyboardButton(
                     text="🎚 Фейд 0.5/1",
                     callback_data=PostprocessCallback(
-                        action="fade_preset", value="0.5:1.0"
+                        action="fade_preset", value="0.5-1.0"
                     ).pack(),
                 ),
             ],

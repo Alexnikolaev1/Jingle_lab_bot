@@ -297,14 +297,14 @@ async def cb_postprocess(
             )
 
         elif action == "trim_preset" and callback_data.value:
-            start_s, end_s = callback_data.value.split(":")
+            start_s, end_s = callback_data.value.split("-")
             await callback.answer("Обрезаю…")
             await _apply_trim(
                 target_message, user_id, last, float(start_s), float(end_s)
             )
 
         elif action == "fade_preset" and callback_data.value:
-            fade_in_s, fade_out_s = callback_data.value.split(":")
+            fade_in_s, fade_out_s = callback_data.value.split("-")
             await callback.answer("Применяю фейды…")
             await _apply_fade(
                 target_message, user_id, last, float(fade_in_s), float(fade_out_s)
